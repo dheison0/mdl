@@ -1,6 +1,6 @@
 import subprocess
 from os import chdir, mkdir
-from sys import argv
+from sys import argv, exit
 from bs4 import BeautifulSoup
 from typing import List
 from requests import get
@@ -52,34 +52,56 @@ def get_folder_items(id: str) -> List[FolderItem]:
         items.append(FolderItem('folder', folder['foldername'], folder['quickkey']))
     return items
 
+def download_file(id: str):
+    print(f"[Info] Getting information about file {id}...")
+    try:
+        file = get_file(id)
+    except:
+        print(f"[ERROR] File {id} not found!")
+        exit(2)
+    print(f"[File] Downloading: {file.name}")
+    exit_code = 1
+    while exit_code > 0:
+        d = subprocess.run([
+            'aria2c', '-s', '16', '-x', '16',
+            '-o', file.name,
+            file.url
+        ])
+        exit_code = d.returncode
+
 
 def download_all(folder_id: str):
-    folder_items = get_folder_items(folder_id)
-    print("Downloading items...")
+    print(f"[Info] Getting information about folder {id}...")
+    try:
+        folder_items = get_folder_items(folder_id)
+    except:
+        print(f"[ERROR] Folder {id} not exists!")
+        exit(3)
+    print("[Folder] Downloading items...")
     for i in folder_items:
         if i.type_ == 'file':
-            file = get_file(i.id)
-            print(f"Downloading: {file.name}")
-            exit_code = 1
-            while exit_code > 0:
-                d = subprocess.run([
-                    'aria2c', '-s', 16, '-x', 16,
-                    '-o', file.name,
-                    file.url
-                ])
-                exit_code = d.returncode
+            download_file(i.id)
         else:
-            print(f"Creating folder {i.name}...")
+            print(f"[Info] Creating folder {i.name}...")
             try: mkdir(i.name)
             except: pass
             chdir(i.name)
             download_all(i.id)
-            print("Going back to old folder...")
+            print("[Info] Going back to old folder...")
             chdir('..')
 
 
 if __name__ == '__main__':
-    if len(argv) > 1:
-        download_all(argv[1])
-    else:
+    if len(argv) < 2:
         print(f'usage: {argv[0]} folder_id')
+        exit(1)
+    for url in argv[1:]:
+        url = argv[1]
+        if '/folder/' in url:
+            id = url.split("/folder/")[1].split("/")[0]
+            download_all(id)
+        elif '/file/' in url:
+            id = url.split("/file/")[1].split("/")[0]
+            download_file(id)
+        else:
+            print(f"[ERROR] Invalid URL: {url}")
